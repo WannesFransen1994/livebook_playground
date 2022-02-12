@@ -1,0 +1,252 @@
+# Elixir immutability and performance
+
+## Introduction
+
+`TODO`: First explain immutability
+
+```elixir
+data_structure = [a: 1, b: 2, c: 3]
+List.delete_at(data_structure, 2)
+```
+
+The same goes for lists, tuples, any other kind of variables. Data cannot be mutated at all, maybe you can rebind a variable, but it will never be mutated.
+
+Don't believe me? Take a look at the previous variable:
+
+```elixir
+IO.inspect(data_structure)
+```
+
+As you can see, it is still the same. Every operation on an existing datastructure returns a new one. This can be a costly process, so depending on how you write your code, you'll either obtain a lot of performance (despite immutability its nature) or barely notice it.
+
+Before we dive head-first into an exercise, let's cover some basic operations and how they behave. Lists are one of the most fundamental data structures you'll use, so we'll take that as an example through this whole page.
+
+## Cover linked list
+
+Use mermaid diagrams for this?
+
+`TODO`: explain linked lists
+
+## Basic operations
+
+In order to explain the complexity of certain operations, we'll refer to them as constant or linear operations. This means:
+
+* Constant: Instant and only requires 1 operation. This is the fastest. Represented as `O(1)`
+* Linear: For a datastructure of N elements, it'll require N operations. Not bad, It's definitely better than exponential (not relevant for this chapter), but could (depending on the situation) be better. Represented as `O(N)`.
+
+You've seen that all of a sudden `O(x)` is used to notate the complexity of a function. This is called the big O notation. We won't go into detail into it, but it's used to define the complexity of something. The most important thing is understanding that the number between the brackets is important. 1 is contant and N is linear, constant is better than linear. Simple, right?
+
+### Update / delete
+
+...
+
+### Prepend
+
+...
+
+### Concatenate /append
+
+...
+
+## See the difference with an exercise
+
+### Description
+
+_This exercise is actually from CodeWars. It's not my content, but did give some insights regarding performance when comparing my solution with other solutions._
+
+This exercise is called "How Green Is My Valley?". The goal is the following:
+
+* Input : an array of integers.
+* Output : this array, but sorted in such a way that there are two wings:
+* the left wing with numbers decreasing,
+* the right wing with numbers increasing.
+* the two wings have the same length. If the length of the array is odd the wings are around the bottom, if the length is even the bottom is considered to be part of the right wing.
+* each integer l of the left wing must be greater or equal to its counterpart r in the right wing, the difference l - r being as small as possible. In other words the right wing must be nearly as steep as the left wing.
+
+Sample usage would be:
+
+```text
+a = [79, 35, 54, 19, 35, 25]
+make_valley(a) --> [79, 35, 25, *19*, 35, 54]
+The bottom is 19, left wing is [79, 35, 25], right wing is [*19*, 35, 54].
+79..................54
+    35..........35
+        25. 
+          ..19
+
+a = [67, 93, 100, -16, 65, 97, 92]
+make_valley(a) --> [100, 93, 67, *-16*, 65, 92, 97]
+The bottom is -16, left wing [100, 93, 67] and right wing [65, 92, 97] have same length.
+100.........................97
+    93..........
+               .........92
+        67......
+               .....65
+            -16     
+
+a = [66, 55, 100, 68, 46, -82, 12, 72, 12, 38]
+make_valley(a) --> [100, 68, 55, 38, 12, *-82*, 12, 46, 66, 72]
+The bottom is -82, left wing is [100, 68, 55, 38, 12]], right wing is [*-82*, 12, 46, 66, 72].
+
+a = [14,14,14,14,7,14]
+make_valley(a) => [14, 14, 14, *7*, 14, 14]
+
+a = [14,14,14,14,14]
+make_valley(a) => [14, 14, *14*, 14, 14]
+```
+
+We won't give the solution away for free. Well actually if you scroll down, we kind of do... but don't look at it yet. Try to solve it yourself in a performant manner, taking previous chapters into account.
+
+### Benchmarking code
+
+The only way to prove that solution A is better than B is with numbers. We've covered the theory so far, but is it actually true? We'll cover 2 solutions and benchmark them both. The benchmarking code isn't really that important, so don't waste too much time on that.
+
+Compile the module so that we can use it in the future.
+
+```elixir
+defmodule Benchmark do
+  def measure(function) do
+    function
+    |> :timer.tc()
+    |> elem(0)
+    |> Kernel./(1_000_000)
+  end
+end
+
+defmodule Random do
+  def random_list(length, list \\ [])
+  def random_list(0, list), do: list
+  def random_list(length, list), do: random_list(length - 1, [random_number() | list])
+  def random_number(), do: :rand.uniform(1000)
+end
+```
+
+The second module is to generate random lists of numbers. Try it out:
+
+```elixir
+# A small list of 5 elements
+Random.random_list(5)
+```
+
+```elixir
+# A huge list of 1 000 elements
+Random.random_list(1_000)
+```
+
+Now we're first going to take a look at the most upvoted solution on CodeWars.
+
+### Not so performant solution
+
+_This solution is from `g964` on CodeWars. By no means is it my personal solution._
+
+```elixir
+defmodule Makevalley do
+  defp _make_valley([]) do
+    []
+  end
+
+  defp _make_valley([x]) do
+    [x]
+  end
+
+  defp _make_valley([x, y | xs]) do
+    [x] ++ _make_valley(xs) ++ [y]
+  end
+
+  def make_valley(a) do
+    b = Enum.sort(a, &(&1 > &2))
+    _make_valley(b)
+  end
+end
+```
+
+You can see that this solution uses the `++` operator quite extensively. We've said before that this isn't good, depending on the situation. Try to make an educated guess how this algorithm will perform. Will it be performant, or not? And why? We recommend to stop reading here, take a paper and write down why.
+
+### A somewhat more performant solution
+
+This is something that I wrote with performance in mind, though there might exist better solutions of course. The most important thing here is to note _why_ it is more performant.
+
+```elixir
+defmodule Makevalley2 do
+  def make_valley(a), do: reorganize(Enum.sort_by(a, & &1, &>=/2))
+
+  defp reorganize(a), do: reorganize(a, 1, [[], []])
+
+  defp reorganize([], _, arr), do: List.flatten(arr)
+
+  defp reorganize([h | t], 1, [oh | ot]), do: reorganize(t, 0, [[oh | [h]] | ot])
+  defp reorganize([h | t], 0, [oh | ot]), do: reorganize(t, 1, [oh | [h | ot]])
+end
+```
+
+_Take note of the different module name. Just so that all of the code executes correctly._
+
+### Comparison based on the previous code
+
+We've covered theory, 2 sample solutions and some benchmarking code. What else do we need? Let's get to it!
+
+```elixir
+# Create some sample data up until 100_000 ish
+sample_datas =
+  Enum.reduce_while(1..100_000, [1], fn _, [latest | _rest] = acc ->
+    if latest < 100_000, do: {:cont, [latest * 2 | acc]}, else: {:halt, acc}
+  end)
+
+sample_datas = Enum.reverse(sample_datas)
+```
+
+Due to the nature of the compiler, it is best to do a dry run of both compiled modules. This is just due to some internal compile behaviour, so don't worry about it too much.
+
+```elixir
+n = Random.random_list(100)
+Benchmark.measure(fn -> Makevalley.make_valley(n) end)
+Benchmark.measure(fn -> Makevalley2.make_valley(n) end)
+:ignore_above_output
+```
+
+Now we're going to use the above generated sample data to see how each algorithm performs. Best is to run every sample point several time and to take the average of that... but let's keep it simple shall we? This isn't a benchmarking contest or something, we just want to see a trend.
+
+```elixir
+time_results =
+  Enum.map(sample_datas, fn n ->
+    random_list = Random.random_list(n)
+    :timer.sleep(10)
+    t1 = Benchmark.measure(fn -> Makevalley.make_valley(random_list) end)
+    :timer.sleep(10)
+    t2 = Benchmark.measure(fn -> Makevalley2.make_valley(random_list) end)
+    {n, {t1, t2}}
+  end)
+```
+
+The data on  its own is already quite obvious, but let's put it in a chart to visualise it as well:
+
+```elixir
+Mix.install([
+  {:vega_lite, "~> 0.1.2"},
+  {:kino, "~> 0.5.0"}
+])
+
+alias VegaLite, as: Vl
+```
+
+data_series:
+
+```elixir
+formatted_data =
+  Enum.reduce(time_results, [], fn {n, {t1, t2}}, acc ->
+    entry_1 = %{"timeline" => "time1", "n" => n, "time" => t1}
+    entry_2 = %{"timeline" => "time2", "n" => n, "time" => t2}
+    [entry_1, entry_2 | acc]
+  end)
+```
+
+visualisation:
+
+```elixir
+Vl.new(width: 800, height: 400)
+|> Vl.data_from_values(formatted_data)
+|> Vl.mark(:line)
+|> Vl.encode_field(:x, "n", type: :quantitative)
+|> Vl.encode_field(:y, "time", type: :quantitative)
+|> Vl.encode_field(:color, "timeline", type: :nominal)
+```
