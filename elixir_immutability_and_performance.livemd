@@ -23,9 +23,19 @@ Before we dive head-first into an exercise, let's cover some basic operations an
 
 ## Cover linked list
 
-Use mermaid diagrams for this?
+![Linked lists overview](./images/linked_lists_overview.png)
 
-`TODO`: explain linked lists
+If you're unfamiliar with the above diagram or can't answer the below question correctly, we suggest to read [linked lists in a functional context](./linked_lists_in_a_functional_context.livemd)
+
+Question: In what order do you have to create the above list `xs`?
+
+<details>
+  <summary>Answer</summary>
+  
+  You have to create the nodes in a backwards manner. Start from the last one, going up to the first one.
+
+  This is because whenever you make a node, you cannot mutate (since its immutable) the reference to the next element. Hence you create `xs[4]`, after which you create the previous node `xs[3]` which points to the already created node.
+</details>
 
 ## Basic operations
 
@@ -33,6 +43,7 @@ In order to explain the complexity of certain operations, we'll refer to them as
 
 * Constant: Instant and only requires 1 operation. This is the fastest. Represented as `O(1)`
 * Linear: For a datastructure of N elements, it'll require N operations. Not bad, It's definitely better than exponential (not relevant for this chapter), but could (depending on the situation) be better. Represented as `O(N)`.
+* Exponential: If you have a datastructure with N elements, where you have to perform N elements every time, then you've got `O(N * N)` or `O(n^2)` exponential complexity.
 
 You've seen that all of a sudden `O(x)` is used to notate the complexity of a function. This is called the big O notation. We won't go into detail into it, but it's used to define the complexity of something. The most important thing is understanding that the number between the brackets is important. 1 is contant and N is linear, constant is better than linear. Simple, right?
 
@@ -250,3 +261,8 @@ Vl.new(width: 800, height: 400)
 |> Vl.encode_field(:y, "time", type: :quantitative)
 |> Vl.encode_field(:color, "timeline", type: :nominal)
 ```
+
+## Extra links
+
+* [structural sharing debugged with :erts_debug](https://stackoverflow.com/questions/67556658/is-everything-in-elixir-a-reference-type)
+* [TODO: map internal representation?](https://stackoverflow.com/questions/25779783/practical-difference-between-erlang-mapsremove-2-and-mapswithout-2)

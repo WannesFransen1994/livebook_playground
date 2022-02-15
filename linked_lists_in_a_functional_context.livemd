@@ -1,0 +1,195 @@
+# Linked lists
+
+## Composition of a linked list
+
+This section is to cover the basics regarding linked lists and how they behave themselves in a functional context. You should be familiar with what a list exactly is and how you use it.
+
+Imagine the following list with 5 nodes:
+
+```mermaid
+graph LR;
+    1-->2;
+    2-->3;
+    3-->4;
+    4-->5;
+```
+
+While you can use the list without worrying about internals, some fundamental things are essential to understand. Knowing this, you progress to the next section, in which you can start understand and utilize optimization techniques.
+
+First of all a linked list consists of elements that are divided in 2 "cells". The first one contains a reference to the actual data, which can be anything.
+
+![Linked lists overview](./images/linked_lists_data.png)
+
+The second element is not something you'll interact with as a programmer, but it's there. It's a reference to the next element in the list. The last element will contain a `nil` as a reference, indicating that it's the end.
+
+### Mini-exercise
+
+Try to create your own list using tuples. _Warning: don't accidentally try to copy / create unnecessary variables._
+
+```elixir
+good_element5 = {5, nil}
+good_element4 = {4, good_element5}
+good_element3 = {3, good_element4}
+good_element2 = {2, good_element3}
+good_final_list = {1, good_element2}
+```
+
+While the representation of this variable in the shell is a bit... confusing, you can see that the variables are nested in each other. The same actually goes for lists! (Who would've thought that... right?)
+
+Note that you've actually applied a prepending technique here. Every time a new node was added, it was in the front, thus **prepending** it to the existing list.
+
+_These lists are actually known as proper lists. Don't worry about those for now, otherwise this fundamental section is going to be quite extensive. Okay, forget those proper lists! Let's go on._
+
+### A bad approach
+
+Some people think that it's best to create the list from the start. And while in a non-functional setting this might be true, it isn't when you have immutable data.
+
+If you'd put it in code (only with 3 nodes):
+
+```elixir
+bad_element1 = {1, nil}
+my_list_step_2 = put_elem(bad_element1, 1, {2, nil})
+bad_element2 = elem(my_list_step_2, 1)
+bad_element3 = {3, nil}
+bad_final_list = put_elem(my_list_step_2, 1, put_elem(bad_element2, 1, bad_element3))
+```
+
+Regardless of the fact that the second approach is annoying and tedious to write, it also isn't efficient. A lot of copy operations have happened here and structural resharing wasn't possible.
+
+### Proving our statements
+
+Personally (Wannes Fransen), when I learn theory the first thing I ask myself is: "Is this true? Is there some kind of proof or is this a sham?".
+
+Your request has been heard. With `:erts_debug.same/2` we can verify whether 2 data structures are identical or not. An example:
+
+```elixir
+true = :erts_debug.same(1, 1)
+false = :erts_debug.same([1], [1])
+true = :erts_debug.same(:a, :a)
+false = :erts_debug.same([:a], [:a])
+list1 = [1, 2, 3]
+false = :erts_debug.same(list1, [1, 2, 3])
+list2 = list1
+true = :erts_debug.same(list1, list2)
+```
+
+@Brooklin, how should I word this? "Primitive" data types are accessed immediately I think but larger data types consists of pointers, which of course return false. Possible that [this link](http://beam-wisdoms.clau.se/en/latest/indepth-memory-layout.html) gives more clarification.
+
+Explanation...
+
+Therefore, you can see that this functions allows us to compare datastructures accurately based on references and pointers. Here we can see that in the good example, structures are reused.
+
+```elixir
+extracted_element5 = good_final_list |> elem(1) |> elem(1) |> elem(1) |> elem(1)
+true = :erts_debug.same(good_element5, extracted_element5)
+```
+
+For the bad example we had to manually create new variables due to the immutable nature of the tuples. In the next section regarding list operations, this will become more clear when structural resharing is possible and when not.
+
+### Extra: performance
+
+Well structural resharing sounds fun and all, but what does this to performance? Well, generate a "list" manually and see what happens. For convenience, here's some example code that generates it for you:
+
+```elixir
+defmodule TupleListGenerator do
+  def good_generator(n), do: good_gen_internal(n, nil)
+  def bad_generator(n), do: bad_gen_internal(n, nil)
+
+  # Explicitly using recursive function and not higher order function Enum.reduce
+  defp good_gen_internal(0, acc), do: acc
+
+  defp good_gen_internal(n, acc) do
+    x = :rand.uniform(100)
+    good_gen_internal(n - 1, {x, acc})
+  end
+
+  defp bad_gen_internal(0, acc), do: acc
+
+  defp bad_gen_internal(n, acc) do
+    x = :rand.uniform(100)
+    new_acc = update_latest_element(x, acc)
+    bad_gen_internal(n - 1, new_acc)
+  end
+
+  defp update_latest_element(x, nil), do: {x, nil}
+  defp update_latest_element(x, {prev_last_x, nil}), do: {prev_last_x, {x, nil}}
+
+  defp update_latest_element(x, {current_x, next_element}),
+    do: {current_x, update_latest_element(x, next_element)}
+end
+```
+
+First verify if it generates tuples that are the same format. Never trust example code until you run it yourself.
+
+```elixir
+IO.inspect(TupleListGenerator.bad_generator(5))
+IO.inspect(TupleListGenerator.good_generator(5))
+```
+
+That works as it should. Now our benchmarking code:
+
+```elixir
+defmodule Benchmark do
+  def measure(function) do
+    function
+    |> :timer.tc()
+    |> elem(0)
+    |> Kernel./(1_000_000)
+  end
+end
+```
+
+Off we go. Lets generate some "lists":
+
+```elixir
+# Create some sample sizes up until 100_000 ish
+sample_sizes =
+  Enum.reduce_while(1..10_000, [1000], fn _, [latest | _rest] = acc ->
+    if latest < 10_000, do: {:cont, [latest + 500 | acc]}, else: {:halt, acc}
+  end)
+
+sample_sizes = Enum.reverse(sample_sizes)
+
+# Next up: do a dry run
+n = 10_000
+Benchmark.measure(fn -> TupleListGenerator.bad_generator(n) end)
+Benchmark.measure(fn -> TupleListGenerator.good_generator(n) end)
+:ignore_above_output
+
+# Actual benchmarking
+time_results =
+  Enum.map(sample_sizes, fn n ->
+    :timer.sleep(10)
+    t1 = Benchmark.measure(fn -> TupleListGenerator.good_generator(n) end)
+    :timer.sleep(10)
+    t2 = Benchmark.measure(fn -> TupleListGenerator.bad_generator(n) end)
+    {n, {t1, t2}}
+  end)
+
+# Install dependencies
+Mix.install([
+  {:vega_lite, "~> 0.1.2"},
+  {:kino, "~> 0.5.0"}
+])
+
+alias VegaLite, as: Vl
+
+# Format and plot it to a graph
+formatted_data =
+  Enum.reduce(time_results, [], fn {n, {t1, t2}}, acc ->
+    entry_1 = %{"timeline" => "Good approach", "n" => n, "time" => t1}
+    entry_2 = %{"timeline" => "Bad approach", "n" => n, "time" => t2}
+    [entry_1, entry_2 | acc]
+  end)
+
+Vl.new(width: 600, height: 400)
+|> Vl.data_from_values(formatted_data)
+|> Vl.mark(:line)
+|> Vl.encode_field(:x, "n", type: :quantitative)
+|> Vl.encode_field(:y, "time", type: :quantitative)
+|> Vl.encode_field(:color, "timeline", type: :nominal)
+```
+
+While this might be obvious, we can see that structural resharing is a lot performant instead of creating new values. That's why it is preferred to prepend instead of append.
+
+Now we did all of this manually, constructed our own "linked list" from tuples and contained links to the next element.
